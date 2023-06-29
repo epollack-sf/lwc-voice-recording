@@ -35,17 +35,25 @@
                     <div class="slds-form-element__control">
                         <template lwc:if={recording}> <!-- should be one label for entire button group -->
                             <lightning-button label="&#9633; Stop Recording" variant="destructive" onclick={stopRecording} stretch></lightning-button>
-                            <lightning-button label="&#9208; Pause Recording" variant="base" onclick={pauseRecording} stretch></lightning-button>
+                            
+                            <template lwc:if={recordingPaused}>
+                                <lightning-button label="&#9655; Resume Recording" variant="base" onclick={resumeRecording} stretch></lightning-button>
+                            </template>
+                            <template lwc:else>
+                                <lightning-button label="&#9208; Pause Recording" variant="base" onclick={pauseRecording} stretch></lightning-button>
+                            </template>
                         </template>
                         <template lwc:elseif={recordingStopped}>
-                            <lightning-button label="Retry Recording" variant="neutral" onclick={resetRecording} stretch></lightning-button>
-                            <lightning-button label="Download Audio" variant="base" onclick={downloadRecording} stretch></lightning-button>
+                            <lightning-button label="&#8634; Retry Recording" variant="neutral" onclick={resetRecording} stretch></lightning-button>
+                            <a href={audioURL} download="voicemail.wav" class="slds-button slds-button_base slds-button_stretch">&#11123; Download Audio</a>
                         </template>
                         <template lwc:else>
                             <button type="button" id="start" class="slds-button slds-button_stretch" style="background-color:darkgreen;color:white;" onclick={startRecording}>&#9675; Start Recording</button>
                         </template>
                     </div>
                 </div>
+
+                <audio src={audioURL} controls></audio>
 
                 <div class="slds-grid slds-gutters_xxx-small slds-grid_align-end">
                     <lightning-button label="Cancel" class="slds-col" onclick={cancelRecording} disabled></lightning-button>
@@ -55,7 +63,6 @@
             <!-- Modal/Popup Box LWC footer starts here -->
             <footer class="slds-modal__footer">
                 <button class="slds-button slds-button_neutral" onclick={closeModal} title="Cancel">Cancel</button>
-                <button class="slds-button slds-button_brand" onclick={submitDetails} title="OK">OK</button>
             </footer>
         </div>
     </section>
