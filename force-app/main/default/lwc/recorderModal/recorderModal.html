@@ -29,29 +29,27 @@
 
 
                 <div class="slds-form-element">
-                    <label class="slds-form-element__label" for="recorder">
+                    <span class="slds-form-element__label">
                         Record New Voicemail
-                    </label>
+                    </span>
                     <div class="slds-form-element__control">
-                        <div id="recorder">
-                            <template lwc:if={recording}> <!-- should be one label for entire button group -->
-                                <lightning-button label="&#9633; Stop Recording" variant="destructive" style="color:white;" onclick={stopRecording} stretch></lightning-button>
-                                <lightning-button label="&#9208; Pause Recording" variant="base" onclick={pauseRecording} stretch></lightning-button>
-                            </template>
-                            <template lwc:elseif={recordingStopped}>
-                                <lightning-button label="Retry Recording" variant="neutral" onclick={resetRecording} stretch></lightning-button>
-                                <lightning-button label="Download Audio" variant="base" onclick={downloadRecording} stretch></lightning-button>
-                            </template>
-                            <template lwc:else>
-                                <button type="button" id="start" class="slds-button slds-button_stretch" style="background-color:darkgreen;color:white;" onclick={startRecording}>&#9675; Start Recording</button>
-                            </template>
-                        </div>
+                        <template lwc:if={recording}> <!-- should be one label for entire button group -->
+                            <lightning-button label="&#9633; Stop Recording" variant="destructive" onclick={stopRecording} stretch></lightning-button>
+                            <lightning-button label="&#9208; Pause Recording" variant="base" onclick={pauseRecording} stretch></lightning-button>
+                        </template>
+                        <template lwc:elseif={recordingStopped}>
+                            <lightning-button label="Retry Recording" variant="neutral" onclick={resetRecording} stretch></lightning-button>
+                            <lightning-button label="Download Audio" variant="base" onclick={downloadRecording} stretch></lightning-button>
+                        </template>
+                        <template lwc:else>
+                            <button type="button" id="start" class="slds-button slds-button_stretch" style="background-color:darkgreen;color:white;" onclick={startRecording}>&#9675; Start Recording</button>
+                        </template>
                     </div>
                 </div>
 
                 <div class="slds-grid slds-gutters_xxx-small slds-grid_align-end">
-                    <lightning-button label="Cancel" class="slds-col" onclick={cancelRecording} disabled={recordingStopped}></lightning-button>
-                    <lightning-button label="Use this recording" class="slds-col" variant="brand" onclick={useRecording} disabled={recordingStopped}></lightning-button>
+                    <lightning-button label="Cancel" class="slds-col" onclick={cancelRecording} disabled></lightning-button>
+                    <lightning-button label="Use this recording" class="slds-col" variant="brand" onclick={useRecording} disabled></lightning-button>
                 </div>
             </div>
             <!-- Modal/Popup Box LWC footer starts here -->
