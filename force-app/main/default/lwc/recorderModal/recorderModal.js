@@ -1,22 +1,42 @@
 import { LightningElement, track } from 'lwc';
 
-export default class RecorderModal extends LightningElement {
-    // mediaEnabled;
-    mediaRecorder;
-    recordingStopped;
-    audioURL;
-    audioBlob;
-    audioCtx;
+const MAX_SECONDS = 300;
 
+export default class RecorderModal extends LightningElement {
+    // Recorder State Flags
     recording = false;
+    playingBack = false;
+    recordingStopped;
     recordingPaused;
+    secondsRecording = 0;
+    isRecordingProgressing;
     
+    // Audio Objects
+    mediaRecorder;
+    audioBlob;
+    audio;
+    audioTime;
+    audioDuration;
+    audioTimeRatio;
+
+    // Recorded Chunks
     @track chunks = [];
+
+    get formattedRecordingTime() {
+        return this._toMMSS(this.secondsRecording);
+    }
+
+    get formattedAudioTime() {
+        return this._toMMSS(this.audioTime);
+    }
+
+    get playbackPaused() {
+        return this.audio?.paused;
+    }
 
     async connectedCallback() {
         if (!navigator.mediaDevices) {
             console.log('Media devices not supported');
-            // this.mediaEnabled = false;
             return;
         }
 
@@ -24,35 +44,34 @@ export default class RecorderModal extends LightningElement {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.mediaRecorder = new MediaRecorder(stream);
             
-            this.audioCtx = new AudioContext();
-            // const recordingSource = this.audioCtx.createMediaStreamSource(stream);
-            console.log(JSON.parse(JSON.stringify(this.audioCtx)));
-            
-
-
             this.mediaRecorder.addEventListener('dataavailable', (e) => {
                 this.chunks.push(e.data);
             });
 
-            this.mediaRecorder.addEventListener('stop', () => {
-                const formattedArrayBuffer = this._generateWavFile(new Blob(this.chunks, { type: 'audio/wav' }), 8000);
-                this.audioBlob = new Blob([ formattedArrayBuffer ], { type: 'audio/wav' });
-                this.audioURL = URL.createObjectURL(this.audioBlob);
+            this.mediaRecorder.addEventListener('stop', async () => {
+                let wavDataView;
+                try {
+                    wavDataView = await this._generateWavFile(new Blob(this.chunks));
+                } catch(err) {
+                    console.error(err.body.message);
+                }
                 
-                // this.audioBlob = new Blob(this.chunks, { type: 'audio/wav' });
-                // this.audioURL = URL.createObjectURL(this.audioBlob);
+                this.audioBlob = new Blob([ wavDataView ], { type: 'audio/wav' });
+                
+                const audioURL = URL.createObjectURL(this.audioBlob);
+                this.audio = new Audio(audioURL);
+                this.audio.addEventListener('loadeddata', () => {
+                    this.audioDuration = this.audio.duration;
+                });
+                this.audio.addEventListener('timeupdate', () => {
+                    this.audioTime = this.audio.currentTime;
+                    this.audioTimeRatio = this.audio.currentTime / this.audio.duration;
+                });
+
+                const downloadElement = this.template.querySelector('a');
+                downloadElement.href = audioURL;
+                
                 this._clearChunks();
-                
-                // try {
-                //     const test = await this.audioBlob.arrayBuffer()
-                //     const audioBuffer = await this.audioCtx.decodeAudioData(test);
-                //     const track = this.audioCtx.createBufferSource();
-                //     track.buffer = audioBuffer;
-                //     track.connect(this.audioCtx.destination);
-                //     track.start(0);
-                // } catch(e) {
-                //     console.error(e);
-                // }
             });
         } catch(err) {
             console.error(`An error occurred: ${err.body.message}`);
@@ -67,33 +86,59 @@ export default class RecorderModal extends LightningElement {
         this.recording = !this.recording;
     }
 
+    toggleRecordingProgress() {
+        if (this.isRecordingProgressing) {
+            this.isRecordingProgressing = false;
+            clearInterval(this._interval);
+        } else {
+            this.isRecordingProgressing = true;
+            this._interval = setInterval(() => {
+                if (this.secondsRecording === MAX_SECONDS) {
+                    this.stopRecording();
+                    return;
+                }
+
+                this.secondsRecording++;
+            }, 1000);
+        }
+    }
+
     startRecording() {
         if (!this.mediaRecorder) {
             return;
         }
-
+        
         this.mediaRecorder.start();
+        
         this.toggleRecording();
+        this.toggleRecordingProgress();
     }
 
     stopRecording() {
         this.mediaRecorder.stop();
         this.toggleRecording();
+        this.toggleRecordingProgress();
         this.recordingStopped = true;
     }
 
     pauseRecording() {
         this.mediaRecorder.pause();
+        this.toggleRecordingProgress();
         this.recordingPaused = true;
     }
 
     resumeRecording() {
         this.mediaRecorder.resume();
+        this.toggleRecordingProgress();
         this.recordingPaused = false;
     }
 
     resetRecording() {
         this._clearChunks();
+        this.recordingStopped = false;
+        this.secondsRecording = 0;
+        this.audioTime = 0;
+        this.audioTimeRatio = 0;
         this.startRecording();
     }
 
@@ -103,64 +148,82 @@ export default class RecorderModal extends LightningElement {
         this.recordingStopped = false;
     }
 
-    downloadRecording() {
-
+    playAudio() {
+        this.audio.play();
     }
 
-    _generateWavFile(blobData, sampleRate) {
-        const channels = 1; // Mono
-        const bitDepth = 8; // 8-bit
-        
-        let dataLength = 0;
-        
-        if (blobData.size) {
-            dataLength = blobData.size;
-        } else if (blobData.length) {
-            dataLength = blobData.length;
-        } else {
-            console.error('Invalid blob data');
-            return null;
-        }
-        
-        const fileSize = 44 + dataLength;
+    pauseAudio() {
+        this.audio.pause();
+    }
+
+    async _generateWavFile(blob) {
+        const sampleRate = 8000;
+        const channels = 1;
+        const bitsPerSample = 8;
+        const audioDataSize = blob.size;
+        const byteOffset = 44;
+        const fileSize = byteOffset + audioDataSize;
+        const byteRate = sampleRate * channels * (bitsPerSample / 8);
+        const blockAlign = channels * (bitsPerSample / 8);
+
         const buffer = new ArrayBuffer(fileSize);
         const view = new DataView(buffer);
-        
-        // RIFF chunk descriptor
+
+        // RIFF Header
+        // ChunkID
         this._writeString(view, 0, 'RIFF');
+        // ChunkSize
         view.setUint32(4, fileSize - 8, true);
+        // Format
         this._writeString(view, 8, 'WAVE');
-        
-        // Format chunk descriptor
+
+        // fmt Subchunk
+        // SubChunk1ID
         this._writeString(view, 12, 'fmt ');
+        // Subchunk1Size
         view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, channels, true);
+        // AudioFormat
+        view.setUint16(20, 7, true);
+        // NumChannels
+        view.setUint16(22, 1, true);
+        // SampleRate
         view.setUint32(24, sampleRate, true);
-        
-        const byteRate = sampleRate * channels * (bitDepth / 8);
+        // ByteRate
         view.setUint32(28, byteRate, true);
-        
-        const blockAlign = channels * (bitDepth / 8);
+        // BlockAlign
         view.setUint16(32, blockAlign, true);
-        view.setUint16(34, bitDepth, true);
-        
-        // Data chunk descriptor
+        // BitsPerSample
+        view.setUint16(34, bitsPerSample, true);
+
+        // data Subchunk
+        // Subchunk2ID
         this._writeString(view, 36, 'data');
-        view.setUint32(40, dataLength, true);
+        // Subchunk2Size
+        view.setUint32(40, audioDataSize, true);
+
+        // append audio data to header
+        let blobBuffer;
+        try {
+            blobBuffer = await blob.arrayBuffer();
+        } catch(err) {
+            console.error(err.body.message);
+        }
+
+        // console.log('blob buffer:' + blobView);
+
+        const blobView = new Uint8Array(blobBuffer);
+        console.log(blobView);
+        console.log(blobView[0])
         
-        // Copy the BLOB data to the WAV file buffer
-        const dataOffset = 44;
-        const reader = new FileReader();
+        const wavView = new Uint8Array(buffer);
         
-        reader.onloadend = () => {
-            const blobDataView = new Uint8Array(reader.result);
-            const wavDataView = new Uint8Array(buffer, dataOffset);
-            wavDataView.set(blobDataView);
-        };
+        console.log(wavView);
         
-        reader.readAsArrayBuffer(blobData);
+        wavView.set(blobView, byteOffset);
         
+        console.log(wavView);
+        console.log(wavView[byteOffset]);
+        console.log(buffer);
         return buffer;
     }
 
@@ -172,5 +235,13 @@ export default class RecorderModal extends LightningElement {
     
     _clearChunks() {
         this.chunks = [];
+    }
+
+    _toMMSS(s) {
+        const minutes = Math.floor(s / 60) || 0;
+        const seconds = Math.floor(s % 60) || 0;
+        const returnedSeconds = seconds < 10 ? `0${seconds}` : `${seconds}`;
+        
+        return `0${minutes}:${returnedSeconds}`;
     }
 }
