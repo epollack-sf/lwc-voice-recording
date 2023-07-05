@@ -208,22 +208,11 @@ export default class RecorderModal extends LightningElement {
         } catch(err) {
             console.error(err.body.message);
         }
-
-        // console.log('blob buffer:' + blobView);
-
+        
         const blobView = new Uint8Array(blobBuffer);
-        console.log(blobView);
-        console.log(blobView[0])
-        
         const wavView = new Uint8Array(buffer);
-        
-        console.log(wavView);
-        
         wavView.set(blobView, byteOffset);
         
-        console.log(wavView);
-        console.log(wavView[byteOffset]);
-        console.log(buffer);
         return buffer;
     }
 
