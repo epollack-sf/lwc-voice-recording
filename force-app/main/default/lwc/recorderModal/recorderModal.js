@@ -49,14 +49,14 @@ export default class RecorderModal extends LightningElement {
             });
 
             this.mediaRecorder.addEventListener('stop', async () => {
-                let wavDataView;
+                let wavBuffer;
                 try {
-                    wavDataView = await this._generateWavFile(new Blob(this.chunks));
+                    wavBuffer = await this._generateWavBuffer(new Blob(this.chunks));
                 } catch(err) {
                     console.error(err.body.message);
                 }
                 
-                this.audioBlob = new Blob([ wavDataView ], { type: 'audio/wav' });
+                this.audioBlob = new Blob([ wavBuffer ], { type: 'audio/wav' });
                 
                 const audioURL = URL.createObjectURL(this.audioBlob);
                 this.audio = new Audio(audioURL);
@@ -156,7 +156,7 @@ export default class RecorderModal extends LightningElement {
         this.audio.pause();
     }
 
-    async _generateWavFile(blob) {
+    async _generateWavBuffer(blob) {
         const sampleRate = 8000;
         const channels = 1;
         const bitsPerSample = 8;
